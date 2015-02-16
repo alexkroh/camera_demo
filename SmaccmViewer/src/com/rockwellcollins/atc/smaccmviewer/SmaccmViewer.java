@@ -6,9 +6,11 @@ import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.net.ConnectException;
 import java.net.Socket;
 
 import javax.swing.JFrame;
@@ -58,6 +60,9 @@ public class SmaccmViewer extends JPanel implements Runnable, ActionListener{
 			InputStream inFromServer = client.getInputStream();
 			in = new DataInputStream(inFromServer);
 			out = new PrintWriter(client.getOutputStream(), true);
+		} catch(ConnectException e) {
+			System.err.printf("Connection to %s:%d refused\n", serverName, port);
+			System.exit(ABORT);
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(ABORT);
@@ -74,11 +79,9 @@ public class SmaccmViewer extends JPanel implements Runnable, ActionListener{
 	public void run() {
 		int[] pixels = new int[width*height*3];
 		byte[] networkBytes = new byte[width*height*3];
-
-		while(true){
-
-			try
-			{
+		
+		try {
+			while(true){
 				in.readFully(networkBytes);
 				for(int i = 0; i < pixels.length; i++){
 					pixels[i] = networkBytes[i];
@@ -91,17 +94,19 @@ public class SmaccmViewer extends JPanel implements Runnable, ActionListener{
 				i = image;
 				//on the server side we keep going if anything is received
 
-			}catch(IOException e)
-			{
-				e.printStackTrace();
+                //these are acks that are received by the sender to let
+			    //her know that we are still listening. after it receives
+			    //a single byte of anything it proceeds to send the next frame
+			    out.print('a');
+			    out.flush();
 			}
 			
-			//these are acks that are received by the sender to let
-			//her know that we are still listening. after it receives
-			//a single byte of anything it proceeds to send the next frame
-			out.print('a');
-			out.flush();
+		} catch(EOFException e) {
+			System.err.printf("Connection to %s:%d lost\n", serverName, port);
+			System.exit(ABORT);
 
+		}catch(IOException e){
+			e.printStackTrace();
 		}
 	}
 
